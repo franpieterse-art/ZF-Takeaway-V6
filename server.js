@@ -11,20 +11,55 @@ async function geminiJSON(prompt,image){
 if(!process.env.GEMINI_API_KEY)throw Error('GEMINI_API_KEY is not configured in Render Environment.');
 const parts=[{text:prompt}];
 if(image){const m=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(image);if(!m||image.length>6e6)throw Error('Use JPG, PNG or WebP smaller than approximately 4 MB.');parts.push({inline_data:{mime_type:'image/'+m[1],data:m[2]}})}
-const model=process.env.GEMINI_MODEL||'gemini-2.5-flash';
-const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseMimeType:'application/json',temperature:0.1}}),signal:AbortSignal.timeout(55000)});
-const j=await r.json();if(!r.ok)throw Error(j.error?.message||'Gemini request failed');
-const txt=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');
-try{return JSON.parse(txt)}catch{throw Error('Gemini did not return valid JSON. Try again.')}
+const models=[process.env.GEMINI_MODEL||'gemini-2.5-flash',process.env.GEMINI_BACKUP_MODEL||'gemini-2.0-flash'].filter((m,i,arr)=>m&&arr.indexOf(m)===i);
+let lastError='Gemini is unavailable';
+for(const model of models){
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'x-goog-api-key':process.env.GEMINI_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseMimeType:'application/json',temperature:0.1}}),signal:AbortSignal.timeout(35000)});
+      const j=await r.json();
+      if(r.ok){const txt=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||'').join('');try{return JSON.parse(txt)}catch{throw Error('Gemini did not return valid JSON')}}
+      lastError=j.error?.message||'Gemini request failed ('+r.status+')';
+      const temporary=[429,500,502,503,504].includes(r.status)||/high demand|overloaded|unavailable|resource exhausted/i.test(lastError);
+      if(!temporary)break;
+      if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(2**attempt)));
+    }catch(e){lastError=e.message||String(e);if(attempt<2)await new Promise(resolve=>setTimeout(resolve,1000*(2**attempt)));}
+  }
+}
+throw Error('AI models are unavailable. '+lastError+' Try later or change GEMINI_MODEL / GEMINI_BACKUP_MODEL in Render.');
+}
+async function groqJSON(prompt,image){
+if(!process.env.GROQ_API_KEY)throw Error('GROQ_API_KEY is not configured in Render Environment.');
+const model=image?(process.env.GROQ_VISION_MODEL||'meta-llama/llama-4-scout-17b-16e-instruct'):(process.env.GROQ_MODEL||'llama-3.3-70b-versatile');
+const content=image?[{type:'text',text:prompt},{type:'image_url',image_url:{url:image}}]:prompt;
+if(image){if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>6e6)throw Error('Use JPG, PNG or WebP smaller than approximately 4 MB.');}
+let last='Groq request failed';
+for(let attempt=0;attempt<3;attempt++){
+try{
+ const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.GROQ_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:'You are a cautious South African takeaway nutrition estimation assistant. Return a valid JSON object only. Never invent exact restaurant prices or verified nutrition.'},{role:'user',content}],temperature:0.1,max_tokens:3000}),signal:AbortSignal.timeout(25000)});
+ const j=await r.json();
+ if(r.ok){let txt=j.choices?.[0]?.message?.content||'';txt=txt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();try{return JSON.parse(txt)}catch{const start=txt.indexOf('{'),end=txt.lastIndexOf('}');if(start>=0&&end>start)return JSON.parse(txt.slice(start,end+1));throw Error('Groq did not return valid JSON')}}
+ last=j.error?.message||'Groq HTTP '+r.status;
+ if(![429,500,502,503,504].includes(r.status))break;
+ if(attempt<2)await new Promise(resolve=>setTimeout(resolve,800*(2**attempt)));
+}catch(e){last=e.message||String(e);if(attempt<2)await new Promise(resolve=>setTimeout(resolve,800*(2**attempt)));}
+}
+throw Error('Groq: '+last);
+}
+async function aiJSON(prompt,image){
+ let failures=[];
+ if(process.env.GROQ_API_KEY){try{return await groqJSON(prompt,image)}catch(e){failures.push(e.message)}}
+ if(process.env.GEMINI_API_KEY){try{return await geminiJSON(prompt,image)}catch(e){failures.push(e.message)}}
+ throw Error(failures.length?'Both AI providers failed: '+failures.join(' | '):'Set GROQ_API_KEY or GEMINI_API_KEY in Render Environment.');
 }
 async function geminiEstimate({image,description,ingredients}){
 if(!image&&!norm(description))throw Error('Add a meal description or upload a food photo.');
 const prompt='Estimate nutrition for this restaurant meal. Treat image as uncertain; do not claim exact weights. Return STRICT JSON object only with keys: name (string), confidence ("low"|"medium"), disclaimer (string), ingredients (array of {name:string, grams:number, calories:number, protein:number, carbs:number, fat:number}). Include oil, sauces, bread or sides if plausible. Macro units grams, calories kcal. Estimate from visible portion and/or description. All numbers >=0, ingredient weights reasonable. Do not invent exact brand nutrition. Meal description: '+norm(description)+'; user adjustments: '+JSON.stringify(ingredients||[]).slice(0,3500);
-let v=await geminiJSON(prompt,image);if(!Array.isArray(v.ingredients))throw Error('AI returned an unexpected response');v.ingredients=v.ingredients.slice(0,25).map(i=>({name:norm(i.name)||'Ingredient',...Object.fromEntries(['grams','calories','protein','carbs','fat'].map(k=>[k,Math.max(0,Math.min(10000,Number(i[k])||0))]))}));return v
+let v=await aiJSON(prompt,image);if(!Array.isArray(v.ingredients))throw Error('AI returned an unexpected response');v.ingredients=v.ingredients.slice(0,25).map(i=>({name:norm(i.name)||'Ingredient',...Object.fromEntries(['grams','calories','protein','carbs','fat'].map(k=>[k,Math.max(0,Math.min(10000,Number(i[k])||0))]))}));return v
 }
-const server=http.createServer(async(req,res)=>{try{let url=new URL(req.url,'http://localhost');if(req.method==='GET'&&url.pathname==='/api/status')return send(res,200,{search:!!process.env.SERPER_API_KEY,ai:!!process.env.GEMINI_API_KEY});if(req.method==='POST'&&url.pathname==='/api/search'){
+const server=http.createServer(async(req,res)=>{try{let url=new URL(req.url,'http://localhost');if(req.method==='GET'&&url.pathname==='/api/status')return send(res,200,{search:!!process.env.SERPER_API_KEY,ai:!!(process.env.GROQ_API_KEY||process.env.GEMINI_API_KEY),primary:process.env.GROQ_API_KEY?'groq':(process.env.GEMINI_API_KEY?'gemini':'none')});if(req.method==='POST'&&url.pathname==='/api/search'){
 if(!process.env.SERPER_API_KEY)return send(res,503,{error:'Add SERPER_API_KEY in Render Environment.'});
-if(!process.env.GEMINI_API_KEY)return send(res,503,{error:'Add GEMINI_API_KEY in Render Environment to estimate calories for search results.'});
+if(!process.env.GROQ_API_KEY&&!process.env.GEMINI_API_KEY)return send(res,503,{error:'Add GROQ_API_KEY or GEMINI_API_KEY in Render Environment to estimate calories.'});
 let b=await body(req,15000),location=norm(b.location)||'Pretoria',categories=(Array.isArray(b.categories)?b.categories:[]).filter(x=>['Chicken','Beef','Burgers','Pizza','Other'].includes(x));
 let terms=categories.length===5||!categories.length?'takeaway meal':categories.join(' OR ');
 let q=`${terms} ${location} menu price site:ubereats.com/za OR site:mrd.com`;
@@ -32,11 +67,11 @@ let j=await serper(q);
 let listings=(j.organic||[]).map(x=>({title:norm(x.title),snippet:String(x.snippet||'').slice(0,900),url:safeUrl(x.link),platform:String(x.link||'').includes('ubereats')?'Uber Eats':'Mr D'})).filter(x=>x.url).slice(0,8);
 if(!listings.length)return send(res,200,{items:[],notice:'No publicly indexed menu listings found.'});
 let instruction=`You extract DISTINCT individual orderable meals from short Google search result snippets for South African takeaway sites, then estimate approximate nutrition based on a typical serving. Do not treat a restaurant name, menu category, family combo, or several dishes as one individual meal. Never invent menu items not mentioned. If a snippet has multiple dishes and prices, make separate items ONLY when a price clearly belongs to that dish. When unsure, set price=null. Return JSON object {items:[{sourceIndex: integer, name: string, category: "Chicken"|"Beef"|"Burgers"|"Pizza"|"Other", price: number|null, calories: number, protein: number, carbs: number, fat: number, estimatedGrams: number, confidence:"low"|"medium", reasoning: string}]}. Max 3 distinct dishes per source and 16 total. Calories kcal, macros grams. Nutrition is an approximate estimate from TEXT, not a food photo. Use conservative realistic portions including sauces/oils where plausible; don't pretend estimates are exact. If no individual meal can be identified from a source, omit it. Do not make up prices or ingredients as facts. Source indices are zero based. Input listings: ${JSON.stringify(listings.map((x,i)=>({sourceIndex:i,title:x.title,snippet:x.snippet})))}`;
-let extracted=(await geminiJSON(instruction)).items||[];
+let extracted=(await aiJSON(instruction)).items||[];
 let valid=extracted.slice(0,24).filter(x=>Number.isInteger(x.sourceIndex)&&listings[x.sourceIndex]&&norm(x.name)).map(x=>{let src=listings[x.sourceIndex];let num=k=>Math.max(0,Math.min(10000,Number(x[k])||0));return {title:norm(x.name),category:['Chicken','Beef','Burgers','Pizza','Other'].includes(x.category)?x.category:'Other',price:x.price===null||x.price===undefined?null:(Number.isFinite(Number(x.price))&&Number(x.price)>0?Number(x.price):null),calories:num('calories'),protein:num('protein'),carbs:num('carbs'),fat:num('fat'),estimatedGrams:num('estimatedGrams'),confidence:x.confidence==='medium'?'medium':'low',reasoning:norm(x.reasoning),platform:src.platform,url:src.url,sourceTitle:src.title}}).filter(x=>x.calories>0);
 let chosen=categories.length?valid.filter(x=>categories.includes(x.category)):valid;
 let maxCal=Number(b.cal)||0,maxPrice=Number(b.budget)||0;
 chosen=chosen.map(x=>({...x,withinCalories:!maxCal||x.calories<=maxCal,withinBudget:x.price!==null&&(!maxPrice||x.price<=maxPrice)}));
 chosen.sort((a,b)=>Number(b.withinCalories&&b.withinBudget)-Number(a.withinCalories&&a.withinBudget));
 return send(res,200,{items:chosen,notice:'AI estimates from publicly indexed TEXT snippets, not actual meal photographs. Prices may be old or missing. No live menu, distance or stock verification. Unknown prices are not confirmed within budget.'});
-}if(req.method==='POST'&&url.pathname==='/api/analyze'){let b=await body(req);return send(res,200,await geminiEstimate(b))}if(req.method==='GET'){let p=url.pathname==='/'?'/index.html':url.pathname;let f=path.resolve(ROOT,'.'+decodeURIComponent(p));if(!f.startsWith(ROOT+path.sep))return send(res,403,{error:'Forbidden'});let ext=path.extname(f);if(!['.html','.js','.css','.png','.ico','.json','.webmanifest'].includes(ext))return send(res,404,{error:'Not found'});return fs.readFile(f,(e,data)=>{if(e)return send(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':({'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':ext==='.html'?'no-cache':'public, max-age=3600'});res.end(data)})}send(res,405,{error:'Method not allowed'})}catch(e){send(res,400,{error:e.message||'Unexpected error'})}});server.listen(PORT,'0.0.0.0',()=>console.log('ZF Takeaway V7 Gemini listening on '+PORT));
+}if(req.method==='POST'&&url.pathname==='/api/analyze'){let b=await body(req);return send(res,200,await geminiEstimate(b))}if(req.method==='GET'){let p=url.pathname==='/'?'/index.html':url.pathname;let f=path.resolve(ROOT,'.'+decodeURIComponent(p));if(!f.startsWith(ROOT+path.sep))return send(res,403,{error:'Forbidden'});let ext=path.extname(f);if(!['.html','.js','.css','.png','.ico','.json','.webmanifest'].includes(ext))return send(res,404,{error:'Not found'});return fs.readFile(f,(e,data)=>{if(e)return send(res,404,{error:'Not found'});res.writeHead(200,{'Content-Type':({'.html':'text/html','.js':'text/javascript','.css':'text/css','.png':'image/png','.json':'application/json','.webmanifest':'application/manifest+json'})[ext]||'application/octet-stream','Cache-Control':ext==='.html'?'no-cache':'public, max-age=3600'});res.end(data)})}send(res,405,{error:'Method not allowed'})}catch(e){send(res,400,{error:e.message||'Unexpected error'})}});server.listen(PORT,'0.0.0.0',()=>console.log('ZF Takeaway V9 Groq + Gemini listening on '+PORT));
