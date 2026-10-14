@@ -11,7 +11,7 @@ async function geminiJSON(prompt,image){
 if(!process.env.GEMINI_API_KEY)throw Error('GEMINI_API_KEY is not configured in Render Environment.');
 const parts=[{text:prompt}];
 if(image){const m=/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(image);if(!m||image.length>6e6)throw Error('Use JPG, PNG or WebP smaller than approximately 4 MB.');parts.push({inline_data:{mime_type:'image/'+m[1],data:m[2]}})}
-const models=[process.env.GEMINI_MODEL||'gemini-2.5-flash',process.env.GEMINI_BACKUP_MODEL||'gemini-2.0-flash'].filter((m,i,arr)=>m&&arr.indexOf(m)===i);
+const models=[process.env.GEMINI_MODEL||'gemini-2.5-flash',process.env.GEMINI_BACKUP_MODEL||'gemini-2.5-flash'].filter((m,i,arr)=>m&&arr.indexOf(m)===i);
 let lastError='Gemini is unavailable';
 for(const model of models){
   for(let attempt=0;attempt<3;attempt++){
@@ -30,15 +30,15 @@ throw Error('AI models are unavailable. '+lastError+' Try later or change GEMINI
 }
 async function groqJSON(prompt,image){
 if(!process.env.GROQ_API_KEY)throw Error('GROQ_API_KEY is not configured in Render Environment.');
-const model=image?(process.env.GROQ_VISION_MODEL||'meta-llama/llama-4-scout-17b-16e-instruct'):(process.env.GROQ_MODEL||'llama-3.3-70b-versatile');
+const model=image?(process.env.GROQ_VISION_MODEL||'meta-llama/llama-4-scout-17b-16e-instruct'):(process.env.GROQ_MODEL||'openai/gpt-oss-20b');
 const content=image?[{type:'text',text:prompt},{type:'image_url',image_url:{url:image}}]:prompt;
 if(image){if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>6e6)throw Error('Use JPG, PNG or WebP smaller than approximately 4 MB.');}
 let last='Groq request failed';
 for(let attempt=0;attempt<3;attempt++){
 try{
- const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.GROQ_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:'You are a cautious South African takeaway nutrition estimation assistant. Return a valid JSON object only. Never invent exact restaurant prices or verified nutrition.'},{role:'user',content}],temperature:0.1,max_tokens:3000}),signal:AbortSignal.timeout(25000)});
+ const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:'Bearer '+process.env.GROQ_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:'You are a cautious South African takeaway nutrition estimation assistant. Return a valid JSON object only. Never invent exact restaurant prices or verified nutrition.'},{role:'user',content}],temperature:0,max_tokens:5000,response_format:{type:'json_object'}}),signal:AbortSignal.timeout(35000)});
  const j=await r.json();
- if(r.ok){let txt=j.choices?.[0]?.message?.content||'';txt=txt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();try{return JSON.parse(txt)}catch{const start=txt.indexOf('{'),end=txt.lastIndexOf('}');if(start>=0&&end>start)return JSON.parse(txt.slice(start,end+1));throw Error('Groq did not return valid JSON')}}
+ if(r.ok){let txt=j.choices?.[0]?.message?.content||'';txt=txt.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();try{return JSON.parse(txt)}catch(e){last='Groq returned malformed or incomplete JSON';if(attempt<2){await new Promise(resolve=>setTimeout(resolve,600*(attempt+1)));continue;}break;}}
  last=j.error?.message||'Groq HTTP '+r.status;
  if(![429,500,502,503,504].includes(r.status))break;
  if(attempt<2)await new Promise(resolve=>setTimeout(resolve,800*(2**attempt)));

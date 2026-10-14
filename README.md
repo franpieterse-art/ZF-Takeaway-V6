@@ -18,3 +18,6 @@ Results come from public Google-indexed snippets, not verified live platform API
 
 ## Test
 `npm start`, then open http://localhost:3000. GET /api/status returns only configured status, not secret values. Search and photo analysis need working API keys and network connectivity.
+
+## V9 JSON response hotfix
+Groq text analysis now requests JSON object output (`response_format`) and retries malformed/truncated responses. Keep `GROQ_MODEL=openai/gpt-oss-20b` in Render. If the model rejects JSON response formatting, consult the Groq model capabilities and change the model accordingly. Gemini backup requires an actually accessible model ID; do not assume availability.
