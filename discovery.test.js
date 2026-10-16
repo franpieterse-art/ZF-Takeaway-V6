@@ -1,5 +1,14 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');
 const {eligibleDeal,outletName,offerEvidence,dishImage}=require('../discovery');
+const {extractPageImage}=require('../discovery');
+test('direct platform menu image takes precedence over outlet artwork',()=>{
+ const html='<meta property="og:image" content="https://cdn.example/outlet.jpg"><script type="application/ld+json">'+JSON.stringify({'@type':'Menu',hasMenuSection:{hasMenuItem:[{name:'Chicken Burger',image:{url:'https://cdn.example/chicken.jpg'}}]}})+'</script>';
+ const image=extractPageImage(html,{title:'Chicken Burger'},src.url);assert.equal(image.imageUrl,'https://cdn.example/chicken.jpg');assert.equal(image.imageKind,'dish');
+});
+test('unrelated menu item is never labelled as requested dish; outlet photo is explicitly labelled',()=>{
+ const html='<meta content="https://cdn.example/outlet.jpg" property="og:image"><script type="application/json">'+JSON.stringify({items:[{title:'Fish and chips',imageUrl:'https://cdn.example/fish.jpg'}]})+'</script>';
+ const image=extractPageImage(html,{title:'Chicken Burger'},src.url);assert.equal(image.imageKind,'outlet');assert.equal(image.imageUrl,'https://cdn.example/outlet.jpg');
+});
 const src={title:'Order Burger House Pretoria',snippet:'Burger House: buy one get one free burger for R99.00 today.',url:'https://www.mrd.com/store/burger'};
 const deal={offerEvidence:'buy one get one free',priceEvidence:'R99.00',dealPrice:99,expiresOn:null};
 test('full-deal budget boundary, missing and fabricated price evidence',()=>{

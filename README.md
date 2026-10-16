@@ -1,3 +1,7 @@
+# ZF Takeaway V12
+
+Read **V12-UPDATE.md** for current photo behaviour, independent searches and Render deployment steps. Includes all V10/V11 features.
+
 # ZF Takeaway V11
 
 See **V11-UPDATE.md** for current features, deployment steps and verification limits. This is the V10-based update with photos, outlet names and 2-for-1 deal search.
