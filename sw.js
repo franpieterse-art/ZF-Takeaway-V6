@@ -1,5 +1,5 @@
-const CACHE='zf-takeaway-v14-1-fresh-assets';
-const SHELL=['/','/index.html','/style.css?v=14.1','/app.js?v=14.1','/specials.js?v=14.1','/pwa.js?v=14.1','/assets/salad.jpg','/assets/measuring-tape.svg','/logo.png','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
+const CACHE='zf-takeaway-v15-restaurant-sites';
+const SHELL=['/','/index.html','/style.css?v=15','/app.js?v=15','/specials.js?v=15','/pwa.js?v=15','/assets/salad.jpg','/assets/measuring-tape.svg','/logo.png','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
 self.addEventListener('install',event=>{event.waitUntil((async()=>{const cache=await caches.open(CACHE);await Promise.all(SHELL.map(async url=>{const response=await fetch(url,{cache:'reload'});if(!response.ok)throw Error('Asset load failed');await cache.put(url,response)}));await self.skipWaiting()})())});
 self.addEventListener('activate',event=>{event.waitUntil((async()=>{await Promise.all((await caches.keys()).filter(k=>k.startsWith('zf-takeaway-')&&k!==CACHE).map(k=>caches.delete(k)));await self.clients.claim()})())});
 self.addEventListener('fetch',event=>{const req=event.request,url=new URL(req.url);if(req.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;
