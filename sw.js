@@ -1,4 +1,4 @@
-const CACHE='zf-takeaway-v13-flying-burgers-header';
+const CACHE='zf-takeaway-v14-uber-menu-image-decoding';
 const SHELL=['/','/index.html','/style.css','/app.js','/specials.js','/pwa.js','/assets/salad.jpg','/assets/measuring-tape.svg','/logo.png','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});

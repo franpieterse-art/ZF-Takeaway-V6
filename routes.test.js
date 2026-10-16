@@ -9,7 +9,7 @@ test('search and specials routes preserve nutrition, show outlet/photos and enfo
  let r=await post('search',{budget:100,cal:600,categories:['Burgers'],minProtein:25});assert.equal(r.status,200);assert.equal(r.body.items[0].outletName,'Burger House');assert.equal(r.body.items[0].withinMacros,true);assert.equal(r.body.items[0].imageUrl,'https://cdn.example/burger.jpg');
  r=await post('specials',{budget:99,location:'Pretoria'});assert.equal(r.body.items.length,1);assert.equal(r.body.items[0].price,99);assert.equal(r.body.items[0].outletName,'Burger House');assert.equal(r.body.items[0].imageUrl,'https://cdn.example/burger.jpg');
  r=await post('specials',{budget:98});assert.equal(r.body.items.length,0);r=await post('specials',{budget:0});assert.equal(r.status,400);
- const sw=await (await fetch(`http://127.0.0.1:${port}/sw.js`)).text();assert.match(sw,/v13-flying-burgers-header/);assert.match(sw,/specials.js/);
+ const sw=await (await fetch(`http://127.0.0.1:${port}/sw.js`)).text();assert.match(sw,/v14-uber-menu-image-decoding/);assert.match(sw,/specials.js/);
  const client=await (await fetch(`http://127.0.0.1:${port}/specials.js`)).text();assert.match(client,/getElementById\('specialBudget'\)/);assert.match(client,/getElementById\('specialLocation'\)/);assert.doesNotMatch(client,/getElementById\('budget'\)/);
  const html=await (await fetch(`http://127.0.0.1:${port}/`)).text();assert.match(html,/id="specialBudget"/);assert.match(html,/id="cal"/);assert.match(html,/id="specialsPanel"/);
  assert.match(html,/header-salad/);assert.match(html,/flying-burger/);
