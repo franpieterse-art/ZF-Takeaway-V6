@@ -1,1 +1,1 @@
-{"name":"zf-takeaway-v6","version":"9.0.0","private":true,"description":"ZF Takeaway restaurant discovery and AI nutrition estimates","scripts":{"start":"node server.js","check":"node --check server.js"},"engines":{"node":">=20"}}
+{"name":"zf-takeaway-v11","version":"11.0.0","private":true,"description":"ZF Takeaway restaurant discovery and AI nutrition estimates","scripts":{"start":"node server.js","check":"node --check server.js && node --test tests/*.test.js"},"engines":{"node":">=20"}}

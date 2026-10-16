@@ -1,3 +1,9 @@
+# ZF Takeaway V11
+
+See **V11-UPDATE.md** for current features, deployment steps and verification limits. This is the V10-based update with photos, outlet names and 2-for-1 deal search.
+
+## Previous setup notes
+
 # ZF Takeaway V9 — Groq primary, Gemini fallback
 
 ## Deploy
