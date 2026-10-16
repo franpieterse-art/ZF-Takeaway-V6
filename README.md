@@ -1,3 +1,3 @@
-# ZF Takeaway V14
+# ZF Takeaway V14.1
 
-Read V14-UPDATE.md. Upload all files to your existing Render repository and deploy.
+Read V14.1-UPDATE.md. This update fixes stale client assets after deployment.

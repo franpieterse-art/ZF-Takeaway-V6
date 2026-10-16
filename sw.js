@@ -1,7 +1,7 @@
-const CACHE='zf-takeaway-v14-uber-menu-image-decoding';
-const SHELL=['/','/index.html','/style.css','/app.js','/specials.js','/pwa.js','/assets/salad.jpg','/assets/measuring-tape.svg','/logo.png','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
-self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting();});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
-self.addEventListener('fetch',e=>{const req=e.request;const u=new URL(req.url);if(req.method!=='GET'||u.origin!==self.location.origin||u.pathname.startsWith('/api/'))return;
-if(req.mode==='navigate'){e.respondWith(fetch(req).catch(()=>caches.match('/index.html')));return;}
-e.respondWith(caches.match(req).then(hit=>hit||fetch(req)));});
+const CACHE='zf-takeaway-v14-1-fresh-assets';
+const SHELL=['/','/index.html','/style.css?v=14.1','/app.js?v=14.1','/specials.js?v=14.1','/pwa.js?v=14.1','/assets/salad.jpg','/assets/measuring-tape.svg','/logo.png','/icon-192.png','/icon-512.png','/manifest.webmanifest'];
+self.addEventListener('install',event=>{event.waitUntil((async()=>{const cache=await caches.open(CACHE);await Promise.all(SHELL.map(async url=>{const response=await fetch(url,{cache:'reload'});if(!response.ok)throw Error('Asset load failed');await cache.put(url,response)}));await self.skipWaiting()})())});
+self.addEventListener('activate',event=>{event.waitUntil((async()=>{await Promise.all((await caches.keys()).filter(k=>k.startsWith('zf-takeaway-')&&k!==CACHE).map(k=>caches.delete(k)));await self.clients.claim()})())});
+self.addEventListener('fetch',event=>{const req=event.request,url=new URL(req.url);if(req.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;
+if(req.mode==='navigate'||/\.(js|css)$/.test(url.pathname)){event.respondWith((async()=>{try{const response=await fetch(req,{cache:'no-store'});if(response.ok){const cache=await caches.open(CACHE);await cache.put(req,response.clone())}return response}catch{const cached=await caches.match(req);if(cached)return cached;if(req.mode==='navigate')return caches.match('/index.html');return Response.error()}})());return;}
+event.respondWith(caches.match(req).then(hit=>hit||fetch(req)))});
