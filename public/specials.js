@@ -1,14 +1,14 @@
 'use strict';
 function addMealPhoto(card,meal){
  const figure=document.createElement('figure');figure.className='dish-photo';
- const placeholder=document.createElement('div');placeholder.className='photo-unavailable';placeholder.textContent='Loading platform photo…';figure.append(placeholder);
+ const placeholder=document.createElement('div');placeholder.className='photo-unavailable';placeholder.textContent='Loading restaurant photo…';figure.append(placeholder);
  const caption=document.createElement('figcaption');figure.append(caption);
- function sourceLink(){try{const u=new URL(meal.imageSource||meal.url);if(u.protocol!=='https:')return;const a=document.createElement('a');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';a.textContent='View photos on '+(meal.platform||'source');figure.append(a)}catch{}}
+ function sourceLink(){try{const u=new URL(meal.imageSource||meal.restaurantUrl);if(u.protocol!=='https:')return;const a=document.createElement('a');a.href=u.href;a.target='_blank';a.rel='noopener noreferrer';a.textContent='View photos on '+(meal.imageProvider||'restaurant website');figure.append(a)}catch{}}
  try{const url=new URL(meal.imageUrl);if(url.protocol!=='https:')throw Error();
   const img=document.createElement('img');img.alt=meal.imageKind==='outlet'?'Outlet image from '+meal.platform:meal.title+' at '+(meal.outletName||'the outlet');img.loading='lazy';
-  img.onload=()=>placeholder.remove();img.onerror=()=>{img.remove();placeholder.textContent='Platform photo could not load';caption.textContent='Open the listing to view its photos.';};
-  caption.textContent=meal.imageKind==='outlet'?'Outlet/listing photo - exact dish photo not exposed':'Dish image from '+(meal.platform||'source')+' - confirm portion';figure.insertBefore(img,caption);img.src=url.href;
- }catch{placeholder.textContent='Photo available on source listing';caption.textContent='A direct image could not be retrieved.'}
+  img.onload=()=>placeholder.remove();img.onerror=()=>{img.remove();placeholder.textContent='Restaurant photo could not load';caption.textContent='Open the listing to view its photos.';};
+  caption.textContent=meal.imageKind==='outlet'?'Outlet/listing photo - exact dish photo not exposed':'Dish image from '+(meal.imageProvider||'restaurant website')+' - confirm portion';figure.insertBefore(img,caption);img.src=url.href;
+ }catch{placeholder.textContent='Photo unavailable';caption.textContent='No matching meal photo found on the restaurant website.'}
  sourceLink();card.append(figure);
 }
 document.addEventListener('DOMContentLoaded',()=>{
